@@ -1,0 +1,87 @@
+# docker compose -f 'docker-compose.yml' up -d --build
+services:
+  ms-users:
+    image: micro-service-user-img
+    #ports:
+    #  - "8080:8080"
+    networks:
+      - ms-red
+  ms-product:
+    image: micro-service-product-img
+    #ports:
+    # - "8081:8080"
+    networks:
+      - ms-red
+  ms-shopping-cart:
+    image: micro-service-shopping-cart-img
+    #ports:
+    # - "8081:8080"
+    networks:
+      - ms-red
+  #docker compose -f docker-compose.yml up -d ms-order
+  ms-order:
+    image: ms-order-img
+    ports:
+    - "8084:8080"  # Usa un puerto distinto como 8084
+    volumes:
+      - h2-data:/data
+    networks:
+      - ms-red
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - ms-red
+  zookeeper:
+    labels:
+      - "service=kafka"
+    image: confluentinc/cp-zookeeper:7.0.1 # Imagen de Zookeeper versión 7.0.1
+    container_name: zookeeper # Nombre del contenedor
+    ports:
+      - "2181:2181" # Expone el puerto 2181 para la comunicación con Kafka
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181 # Puerto en el que Zookeeper escucha conexiones de clientes
+      ZOOKEEPER_TICK_TIME: 2000 # Tiempo de intervalo entre latidos (en ms)
+    networks:
+      - ms-red
+  # Servicio de Kafka (mensajería en tiempo real)
+  kafka:
+    labels:
+      - "service=kafka"
+    image: confluentinc/cp-kafka:7.3.1 # Imagen de Kafka versión 7.0.1
+    container_name: kafka # Nombre del contenedor
+    ports:
+      - "9092:9092" # Expone el puerto 9092 para la comunicación con productores/consumidores
+    environment:
+      KAFKA_BROKER_ID: 1 # Identificador único del broker
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181 # Conexión con Zookeeper
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Factor de replicación de los offsets (1 porque solo hay un broker)
+    depends_on:
+      - zookeeper # Asegura que Kafka se inicie después de Zookeeper
+    networks:
+      - ms-red
+  # Servicio para crear un tema (topic) en Kafka automáticamente
+  create-topic:
+    labels:
+      - "service=kafka"
+    image: confluentinc/cp-kafka:7.3.1 # Reutiliza la imagen de Kafka
+    container_name: kafka-topic # Nombre del contenedor
+    depends_on:
+      - kafka # Espera a que Kafka esté disponible
+    command: >
+      bash -c "sleep 10 && kafka-topics --create --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic product-topic"
+    networks:
+      - ms-red
+    # Espera 10 segundos antes de crear el topic product-topic
+    # Esto evita problemas si Kafka aún no está completamente listo
+    # Servicio de PostgreSQL (base de datos)
+networks:
+  ms-red:
+    driver: bridge
+volumes:
+  h2-data:

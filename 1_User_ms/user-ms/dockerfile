@@ -1,0 +1,36 @@
+#FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu as base
+#EXPOSE 8080
+#ADD target/micro-service-user.jar micro-service-user.jar
+#ENTRYPOINT [ "java", "-jar", "/micro-service-user.jar" ]
+
+# Etapa 1: Construcción
+FROM maven:3.9.6-eclipse-temurin AS builder
+
+WORKDIR /app
+
+# Copia los archivos del proyecto
+COPY pom.xml .
+# Copia solo los archivos esenciales para aprovechar la caché de Docker
+RUN mvn dependency:go-offline -B 
+# Copia el código fuente después de descargar dependencias
+COPY src ./src
+
+# Compila la aplicación con la opción -parameters
+RUN mvn clean package -DskipTests \
+    -Dmaven.compiler.parameters=true \
+    -Dmaven.compiler.argument=-parameters
+
+# Etapa 2: Imagen final con OpenJDK 21
+FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu AS runtime
+
+
+WORKDIR /app
+
+# Copia el JAR generado desde el builder
+COPY --from=builder /app/target/micro-service-user.jar /app/app.jar
+
+# Expone el puerto de la aplicación
+EXPOSE 8080
+
+# Ejecuta la aplicación con parámetros adicionales si es necesario
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
