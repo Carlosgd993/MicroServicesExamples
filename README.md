@@ -1,4 +1,9 @@
 # Microservicios de Ejemplo
+- Orquesta 4 microservicios Spring Boot y cada uno gestiona una entidad
+- Bases de datos en memoria H2
+- docker-compose con todo preparado
+- nginx.conf para la gestión de los puertos dentro de los contenedores
+
 
 ## 1 User 
 Micro servicio CRUD de User
